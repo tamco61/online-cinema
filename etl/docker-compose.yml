@@ -1,0 +1,172 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for Airflow metadata
+  postgres:
+    image: postgres:15
+    container_name: etl-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - etl-network
+
+  # Redis for Celery broker and Airflow Celery executor
+  redis:
+    image: redis:7-alpine
+    container_name: etl-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - etl-network
+
+  # Airflow webserver
+  airflow-webserver:
+    build: .
+    container_name: etl-airflow-webserver
+    command: >
+      bash -c "airflow db init &&
+               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@cinema.example.com || true &&
+               airflow webserver"
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./airflow/dags:/app/airflow/dags
+      - ./airflow/logs:/app/airflow/logs
+      - ./airflow/plugins:/app/airflow/plugins
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - etl-network
+
+  # Airflow scheduler
+  airflow-scheduler:
+    build: .
+    container_name: etl-airflow-scheduler
+    command: airflow scheduler
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+      - airflow-webserver
+    volumes:
+      - ./airflow/dags:/app/airflow/dags
+      - ./airflow/logs:/app/airflow/logs
+      - ./airflow/plugins:/app/airflow/plugins
+    networks:
+      - etl-network
+
+  # Airflow Celery worker (for Airflow tasks)
+  airflow-worker:
+    build: .
+    container_name: etl-airflow-worker
+    command: airflow celery worker
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+      - airflow-scheduler
+    volumes:
+      - ./airflow/dags:/app/airflow/dags
+      - ./airflow/logs:/app/airflow/logs
+      - ./airflow/plugins:/app/airflow/plugins
+    networks:
+      - etl-network
+
+  # Celery worker for video transcoding
+  celery-worker-transcoding:
+    build: .
+    container_name: etl-celery-transcoding
+    command: celery -A worker worker --loglevel=info --queue=transcoding --concurrency=2
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./celery-workers:/app/celery-workers
+      - video-temp:/tmp/videos
+    working_dir: /app/celery-workers
+    networks:
+      - etl-network
+
+  # Celery worker for thumbnail generation
+  celery-worker-thumbnails:
+    build: .
+    container_name: etl-celery-thumbnails
+    command: celery -A worker worker --loglevel=info --queue=thumbnails --concurrency=4
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./celery-workers:/app/celery-workers
+      - thumbnail-temp:/tmp/thumbnails
+    working_dir: /app/celery-workers
+    networks:
+      - etl-network
+
+  # Celery worker for Elasticsearch indexing
+  celery-worker-indexing:
+    build: .
+    container_name: etl-celery-indexing
+    command: celery -A worker worker --loglevel=info --queue=indexing --concurrency=4
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./celery-workers:/app/celery-workers
+    working_dir: /app/celery-workers
+    networks:
+      - etl-network
+
+  # Flower - Celery monitoring
+  flower:
+    build: .
+    container_name: etl-flower
+    command: celery -A worker flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./celery-workers:/app/celery-workers
+    working_dir: /app/celery-workers
+    networks:
+      - etl-network
+
+volumes:
+  postgres-data:
+  redis-data:
+  video-temp:
+  thumbnail-temp:
+
+networks:
+  etl-network:
+    driver: bridge

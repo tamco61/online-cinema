@@ -1,0 +1,378 @@
+version: '3.9'
+
+# Online Cinema - Infrastructure Services
+# This compose file sets up the core infrastructure:
+# PostgreSQL, Redis, Kafka, Elasticsearch, ClickHouse, MinIO
+
+networks:
+  cinema-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+  zookeeper-data:
+  elasticsearch-data:
+  clickhouse-data:
+  minio-data:
+
+services:
+  # ================================
+  # PostgreSQL - Primary Database
+  # ================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: cinema-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cinema}
+      POSTGRES_USER: ${POSTGRES_USER:-cinema}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cinema123}
+      POSTGRES_MULTIPLE_DATABASES: auth_db,user_db,catalog_db,payment_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cinema}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # Redis - Cache & Session Store
+  # ================================
+  redis:
+    image: redis:7-alpine
+    container_name: cinema-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # Zookeeper - Kafka Coordination
+  # ================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: cinema-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # Kafka - Message Broker
+  # ================================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: cinema-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # Kafka UI - Management Interface
+  # ================================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: cinema-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: cinema-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8080:8080"
+    networks:
+      - cinema-network
+
+  # ================================
+  # Elasticsearch - Search Engine
+  # ================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: cinema-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.name=cinema-cluster
+      - bootstrap.memory_lock=true
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - cinema-network
+
+  # ================================
+  # Kibana - Elasticsearch UI
+  # ================================
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: cinema-kibana
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      SERVER_NAME: cinema-kibana
+    ports:
+      - "5601:5601"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # ClickHouse - Analytics Database
+  # ================================
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.11-alpine
+    container_name: cinema-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: analytics
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"  # Native protocol
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./infrastructure/monitoring/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # MinIO - S3-Compatible Storage
+  # ================================
+  minio:
+    image: minio/minio:latest
+    container_name: cinema-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # MinIO Client - Bucket Setup
+  # ================================
+  minio-init:
+    image: minio/mc:latest
+    container_name: cinema-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set cinema http://minio:9000 minioadmin minioadmin123;
+      mc mb cinema/movies --ignore-existing;
+      mc mb cinema/thumbnails --ignore-existing;
+      mc mb cinema/subtitles --ignore-existing;
+      mc anonymous set download cinema/movies;
+      mc anonymous set download cinema/thumbnails;
+      echo 'Buckets created successfully';
+      "
+    networks:
+      - cinema-network
+
+  # ================================
+  # Prometheus - Metrics Collection
+  # ================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: cinema-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infrastructure/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # Grafana - Metrics Visualization
+  # ================================
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: cinema-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./infrastructure/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./infrastructure/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # Jaeger - Distributed Tracing
+  # ================================
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    container_name: cinema-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: :9411
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "5775:5775/udp"  # accept zipkin.thrift over compact thrift protocol
+      - "6831:6831/udp"  # accept jaeger.thrift over compact thrift protocol
+      - "6832:6832/udp"  # accept jaeger.thrift over binary thrift protocol
+      - "5778:5778"      # serve configs
+      - "16686:16686"    # serve frontend
+      - "14268:14268"    # accept jaeger.thrift directly from clients
+      - "14250:14250"    # accept model.proto
+      - "9411:9411"      # Zipkin compatible endpoint
+      - "4317:4317"      # OTLP gRPC
+      - "4318:4318"      # OTLP HTTP
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cinema-network
+
+  # ================================
+  # pgAdmin - PostgreSQL UI (Optional)
+  # ================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: cinema-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@cinema.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_LISTEN_PORT: 5050
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./infrastructure/monitoring/pgadmin/servers.json:/pgadmin4/servers.json
+    networks:
+      - cinema-network
+    profiles:
+      - tools
+
+# Healthcheck summary
+# Run: docker-compose ps
+# All services should show "Up (healthy)"

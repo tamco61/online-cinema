@@ -1,0 +1,118 @@
+# Prometheus Configuration for Online Cinema
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'cinema-cluster'
+    environment: 'development'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # PostgreSQL Exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # Redis Exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Kafka Exporter
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+
+  # Elasticsearch Exporter
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+
+  # ClickHouse Exporter
+  - job_name: 'clickhouse'
+    static_configs:
+      - targets: ['clickhouse:9363']
+
+  # MinIO
+  - job_name: 'minio'
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ['minio:9000']
+
+  # Microservices (FastAPI apps with prometheus-fastapi-instrumentator)
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:8001']
+    metrics_path: '/metrics'
+
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:8002']
+    metrics_path: '/metrics'
+
+  - job_name: 'catalog-service'
+    static_configs:
+      - targets: ['catalog-service:8003']
+    metrics_path: '/metrics'
+
+  - job_name: 'search-service'
+    static_configs:
+      - targets: ['search-service:8004']
+    metrics_path: '/metrics'
+
+  - job_name: 'streaming-service'
+    static_configs:
+      - targets: ['streaming-service:8005']
+    metrics_path: '/metrics'
+
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['analytics-service:8006']
+    metrics_path: '/metrics'
+
+  - job_name: 'recommendation-service'
+    static_configs:
+      - targets: ['recommendation-service:8007']
+    metrics_path: '/metrics'
+
+  - job_name: 'payment-service'
+    static_configs:
+      - targets: ['payment-service:8008']
+    metrics_path: '/metrics'
+
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:8009']
+    metrics_path: '/metrics'
+
+  # Celery Workers (flower or prometheus-celery-exporter)
+  - job_name: 'celery'
+    static_configs:
+      - targets: ['celery-exporter:9808']
+
+  # NGINX
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+
+  # Node Exporter (system metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']

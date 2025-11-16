@@ -1,0 +1,26 @@
+# FastAPI and web server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Kafka
+aiokafka==0.10.0
+
+# HTTP client (for email providers)
+httpx==0.25.2
+
+# Email providers (optional, install as needed)
+# sendgrid==6.11.0  # SendGrid
+# boto3==1.29.7  # AWS SES
+
+# Push providers (optional, install as needed)
+# firebase-admin==6.3.0  # Firebase Cloud Messaging
+
+# Utilities
+python-dateutil==2.8.2
+jinja2==3.1.2  # For email templating
+
+# Development
+pytest==7.4.3
+pytest-asyncio==0.21.1

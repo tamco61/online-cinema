@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Cinema PostgreSQL",
+      "Group": "Online Cinema",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "cinema",
+      "Username": "cinema",
+      "SSLMode": "prefer",
+      "Comment": "Main PostgreSQL server for Online Cinema microservices"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Notification Service
+  notification-service:
+    build: .
+    container_name: notification-service
+    ports:
+      - "8008:8008"
+    environment:
+      - EMAIL_PROVIDER=console  # console, sendgrid, aws_ses
+      - PUSH_PROVIDER=console  # console, fcm
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ENABLE_KAFKA=true
+      - DEBUG=true
+    depends_on:
+      - kafka
+      - zookeeper
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  # Zookeeper (required for Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: notification-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  # Kafka Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: notification-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    depends_on:
+      - zookeeper
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+networks:
+  notification-network:
+    driver: bridge
