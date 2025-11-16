@@ -14,13 +14,16 @@ Scalable microservices-based online cinema platform built with modern Python sta
 
 ### Key Features
 
-- **Microservices Architecture** - 9 independent services with clear responsibilities
-- **Elastic Search** - Fast full-text search across movie catalog
-- **Video Streaming** - Adaptive bitrate streaming (HLS/DASH) with CDN support
-- **Real-time Analytics** - User behavior tracking and business intelligence
-- **Recommendations** - ML-powered personalized content suggestions
-- **Event-Driven** - Apache Kafka for async communication and event sourcing
-- **Observability** - Complete monitoring, logging, and distributed tracing
+- **Microservices Architecture** - 8 independent services with clear responsibilities ✅
+- **Elastic Search** - Fast full-text search across movie catalog ✅
+- **Video Streaming** - Adaptive bitrate streaming (HLS/DASH) with CDN support ✅
+- **Real-time Analytics** - User behavior tracking with ClickHouse ✅
+- **Payment Integration** - YooMoney integration with idempotency ✅
+- **Notifications** - Email (SendGrid/AWS SES) and Push (FCM) ✅
+- **Event-Driven** - Apache Kafka for async communication and event sourcing ✅
+- **Observability** - Complete monitoring, logging, and distributed tracing ✅
+- **ETL Pipeline** - Apache Airflow + Celery for video transcoding ✅
+- **API Gateway** - NGINX + Kong with JWT auth, rate limiting ✅
 
 ---
 
@@ -102,16 +105,15 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed design.
 
 ```
 online-cinema/
-├── services/                    # Microservices
-│   ├── auth-service/           # Authentication & JWT
-│   ├── user-service/           # User profiles & subscriptions
-│   ├── catalog-service/        # Movie metadata CRUD
-│   ├── search-service/         # Elasticsearch integration
-│   ├── streaming-service/      # Video streaming & access control
-│   ├── analytics-service/      # Event collection & ClickHouse
-│   ├── recommendation-service/ # ML-based recommendations
-│   ├── payment-service/        # Stripe/PayPal integration
-│   └── notification-service/   # Email/Push notifications
+├── services/                    # Microservices (✅ All Implemented)
+│   ├── auth-service/           # Authentication & JWT ✅
+│   ├── user-service/           # User profiles & subscriptions ✅
+│   ├── catalog-service/        # Movie metadata CRUD ✅
+│   ├── search-service/         # Elasticsearch integration ✅
+│   ├── streaming-service/      # Video streaming & access control ✅
+│   ├── analytics-service/      # Event collection & ClickHouse ✅
+│   ├── payment-service/        # YooMoney integration ✅
+│   └── notification-service/   # Email/Push notifications ✅
 │
 ├── etl/                        # Data pipelines
 │   ├── airflow/               # DAGs & workflows
@@ -154,102 +156,84 @@ online-cinema/
 
 ## Quick Start
 
+> **🚀 TL;DR**: Complete platform setup in 3 commands!
+
+```bash
+cd infrastructure
+make init    # Initialize environment
+make up      # Start everything (infrastructure + all 8 microservices)
+make health-check  # Verify (wait 2-3 min after start)
+```
+
+📖 **Detailed guide**: [infrastructure/QUICKSTART.md](infrastructure/QUICKSTART.md)
+
 ### Prerequisites
 
-- Docker 24+ and Docker Compose 2.20+
-- Python 3.11+
-- Make (optional, for convenience)
-- 16GB RAM recommended (for running all services locally)
+- ✅ **Docker Desktop** (or Docker Engine + Docker Compose)
+- ✅ **8GB RAM minimum** (12GB recommended)
+- ✅ **20GB free disk space**
+- ✅ **Make** (optional, but recommended)
 
-### 1. Clone Repository
+### What Gets Started
 
-```bash
-git clone https://github.com/your-org/online-cinema.git
-cd online-cinema
-```
+**Infrastructure (12 components)**:
+- PostgreSQL, Redis, ClickHouse, Elasticsearch
+- Kafka + Zookeeper
+- MinIO (S3-compatible storage)
+- NGINX + Kong (API Gateway)
+- Prometheus + Grafana (Monitoring)
+- Jaeger (Distributed Tracing)
+- ELK Stack (Logging)
 
-### 2. Setup Environment
+**Microservices (8 services)**:
+- ✅ auth-service → http://localhost:8001
+- ✅ user-service → http://localhost:8002
+- ✅ catalog-service → http://localhost:8003
+- ✅ search-service → http://localhost:8004
+- ✅ streaming-service → http://localhost:8005
+- ✅ analytics-service → http://localhost:8006
+- ✅ payment-service → http://localhost:8007
+- ✅ notification-service → http://localhost:8008
 
-```bash
-# Copy environment template
-cp .env.example .env
+### Access Points After Start
 
-# Edit .env with your settings
-# vim .env
-```
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| **API Gateway** | http://localhost | - |
+| **Kong Admin** | http://localhost:8001 | - |
+| **Grafana** | http://localhost:3000 | admin/admin |
+| **Prometheus** | http://localhost:9090 | - |
+| **Jaeger** | http://localhost:16686 | - |
+| **Kibana** | http://localhost:5601 | - |
+| **MinIO Console** | http://localhost:9001 | minio/minio_dev_password |
 
-### 3. Start Infrastructure
-
-Start PostgreSQL, Redis, Kafka, Elasticsearch, ClickHouse, MinIO:
-
-```bash
-docker-compose up -d
-```
-
-Verify all services are running:
-
-```bash
-docker-compose ps
-```
-
-Expected output:
-```
-NAME                STATUS              PORTS
-postgres            Up (healthy)        5432
-redis               Up (healthy)        6379
-kafka               Up (healthy)        9092
-zookeeper           Up (healthy)        2181
-elasticsearch       Up (healthy)        9200, 9300
-clickhouse          Up (healthy)        8123, 9000
-minio               Up (healthy)        9000, 9001
-```
-
-### 4. Initialize Databases
+### Quick Health Check
 
 ```bash
-# Run migrations
-./scripts/init-db.sh
+# Check all services
+make health-check
 
-# Seed sample data (optional)
-python scripts/seed-data.py
+# Or manually
+curl http://localhost/health                # NGINX
+curl http://localhost:8001/status           # Kong
+curl http://localhost:8003/health          # Catalog service
+curl http://localhost:8006/health          # Analytics service
 ```
 
-### 5. Start Microservices (Development)
-
-Each service can be run independently:
+### Useful Commands
 
 ```bash
-# Example: Auth Service
-cd services/auth-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8001
+make status              # Show container status
+make logs                # View all logs
+make logs-service SERVICE=catalog-service  # Service-specific logs
+make down                # Stop everything
+make clean-volumes       # Clean all data (CAUTION!)
 
-# Example: Catalog Service
-cd services/catalog-service
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8002
+# Monitoring
+make open-grafana        # Open Grafana in browser
+make open-prometheus     # Open Prometheus
+make open-jaeger         # Open Jaeger
 ```
-
-Or use Docker Compose for all services (coming soon):
-
-```bash
-docker-compose -f docker-compose.services.yml up
-```
-
-### 6. Access Services
-
-| Service              | URL                          | Credentials       |
-|----------------------|------------------------------|-------------------|
-| PostgreSQL           | localhost:5432               | cinema/cinema     |
-| Redis                | localhost:6379               | -                 |
-| Kafka                | localhost:9092               | -                 |
-| Elasticsearch        | http://localhost:9200        | -                 |
-| ClickHouse           | http://localhost:8123        | default/(empty)   |
-| MinIO Console        | http://localhost:9001        | minioadmin/...    |
-| Prometheus           | http://localhost:9090        | -                 |
-| Grafana              | http://localhost:3000        | admin/admin       |
-| Jaeger UI            | http://localhost:16686       | -                 |
-| Kibana               | http://localhost:5601        | -                 |
 
 ---
 
@@ -382,14 +366,42 @@ Centralized logging with structured JSON:
 
 ## API Documentation
 
-Each service exposes auto-generated OpenAPI docs:
+Each service exposes auto-generated OpenAPI docs (Swagger UI):
 
-- Auth Service: http://localhost:8001/docs
-- Catalog Service: http://localhost:8002/docs
-- Search Service: http://localhost:8003/docs
-- Streaming Service: http://localhost:8004/docs
+| Service | Swagger UI | Description |
+|---------|-----------|-------------|
+| Auth | http://localhost:8001/docs | Login, register, JWT tokens |
+| User | http://localhost:8002/docs | User profiles, subscriptions |
+| Catalog | http://localhost:8003/docs | Movies, genres, actors |
+| Search | http://localhost:8004/docs | Full-text search |
+| Streaming | http://localhost:8005/docs | Video URLs, access control |
+| Analytics | http://localhost:8006/docs | Viewing events, statistics |
+| Payment | http://localhost:8007/docs | Subscriptions, invoices |
+| Notification | http://localhost:8008/docs | Send notifications |
 
-Interactive Swagger UI for testing endpoints.
+### Example API Usage
+
+```bash
+# Register user
+curl -X POST http://localhost/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"secure123"}'
+
+# Login
+curl -X POST http://localhost/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"secure123"}'
+
+# Get movies (through API Gateway)
+curl http://localhost/api/v1/catalog/movies?page=1&limit=10
+
+# Search movies
+curl http://localhost/api/v1/search?q=inception
+
+# Get streaming URL (with JWT)
+curl http://localhost/api/v1/stream/movies/123/hls \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
 
 ---
 
@@ -416,16 +428,45 @@ refactor(streaming): optimize video URL generation
 
 ## Roadmap
 
+### Phase 1: Core Platform ✅ (COMPLETED)
 - [x] Microservices architecture design
 - [x] Infrastructure setup (Docker Compose)
-- [ ] Implement all 9 microservices
-- [ ] Kubernetes deployment manifests
-- [ ] CI/CD pipelines (GitHub Actions)
-- [ ] Load testing (Locust)
-- [ ] Security audit (OWASP)
-- [ ] Mobile app integration
-- [ ] ML-based recommendations (TensorFlow)
-- [ ] Multi-region deployment
+- [x] Implement all 8 microservices
+  - [x] auth-service (JWT, refresh tokens)
+  - [x] user-service (profiles, subscriptions)
+  - [x] catalog-service (movies CRUD, genres, actors)
+  - [x] search-service (Elasticsearch integration)
+  - [x] streaming-service (HLS/DASH, access control)
+  - [x] analytics-service (ClickHouse, real-time events)
+  - [x] payment-service (YooMoney, idempotency)
+  - [x] notification-service (Email/Push, Kafka consumers)
+- [x] API Gateway (NGINX + Kong)
+- [x] ETL Pipeline (Airflow + Celery)
+- [x] Monitoring stack (Prometheus, Grafana, Jaeger, ELK)
+
+### Phase 2: Deployment & CI/CD ✅ (COMPLETED)
+- [x] Kubernetes deployment manifests
+- [x] HPA (Horizontal Pod Autoscaler)
+- [x] Ingress configuration
+- [x] ConfigMaps and Secrets management
+- [x] CI/CD pipelines (GitHub Actions)
+  - [x] CI: Lint, test, security scan, build
+  - [x] CD: Deploy to staging/production
+
+### Phase 3: Production Ready 🚧 (IN PROGRESS)
+- [ ] Load testing (Locust/k6)
+- [ ] Security audit (OWASP, penetration testing)
+- [ ] Performance optimization
+- [ ] Documentation completion
+- [ ] Runbooks and playbooks
+
+### Phase 4: Advanced Features 📋 (PLANNED)
+- [ ] ML-based recommendations (TensorFlow/PyTorch)
+- [ ] Mobile app integration (iOS/Android)
+- [ ] Multi-region deployment (CDN, geo-routing)
+- [ ] A/B testing framework
+- [ ] Real-time chat/comments
+- [ ] Social features (sharing, ratings)
 
 ---
 
@@ -435,9 +476,27 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
 
 ---
 
+## Documentation
+
+### Getting Started
+- 📖 [Quick Start Guide](infrastructure/QUICKSTART.md) - Get running in 5 minutes
+- 📖 [Infrastructure README](infrastructure/README.md) - Complete infrastructure documentation
+- 📖 [ETL Documentation](etl/README.md) - Airflow & Celery pipelines
+- 📖 [API Gateway Guide](api-gateway/README.md) - NGINX + Kong setup
+
+### Service Documentation
+Each microservice has its own README with API documentation:
+- [auth-service](services/auth-service/README.md)
+- [user-service](services/user-service/README.md)
+- [catalog-service](services/catalog-service/README.md)
+- [search-service](services/search-service/README.md)
+- [streaming-service](services/streaming-service/README.md)
+- [analytics-service](services/analytics-service/README.md)
+- [payment-service](services/payment-service/README.md)
+- [notification-service](services/notification-service/README.md)
+
 ## Support
 
-- **Documentation**: [docs/](./docs/)
 - **Issues**: [GitHub Issues](https://github.com/your-org/online-cinema/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/your-org/online-cinema/discussions)
 - **Email**: devops@cinema.example.com
