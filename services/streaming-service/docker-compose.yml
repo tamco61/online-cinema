@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_USER: streaming_service
       POSTGRES_PASSWORD: streaming_password
-      POSTGRES_DB: streaming_db
+      POSTGRES_DB: streaming_service
     ports:
       - "5435:5432"
     volumes:
@@ -116,7 +116,7 @@ services:
       - S3_ENDPOINT_URL=http://minio:9000
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - USER_SERVICE_URL=http://user-service:8002
-      - ENABLE_KAFKA=true
+      - ENABLE_KAFKA=false
     volumes:
       - ./app:/app/app
     restart: unless-stopped
