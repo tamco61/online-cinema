@@ -97,7 +97,7 @@ class YooMoneyClient:
                     "confirmation_url": checkout_url,
                     "return_url": return_url
                 },
-                "metadata": metadata or {},
+                "payment_metadata": metadata or {},
                 "created_at": datetime.utcnow().isoformat(),
                 "expires_at": (datetime.utcnow() + timedelta(minutes=settings.PAYMENT_TIMEOUT_MINUTES)).isoformat(),
                 "paid": False,

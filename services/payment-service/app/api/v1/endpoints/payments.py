@@ -143,7 +143,7 @@ async def handle_webhook(
                 "value": "599.00",
                 "currency": "RUB"
             },
-            "metadata": {
+            "payment_metadata": {
                 "payment_id": "uuid"
             }
         }

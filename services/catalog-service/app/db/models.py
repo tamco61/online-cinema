@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    Column
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -34,9 +35,8 @@ class PersonRole(str, enum.Enum):
 movie_genres = Table(
     "movie_genres",
     Base.metadata,
-    mapped_column("movie_id", UUID(as_uuid=True), ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True),
-    mapped_column("genre_id", UUID(as_uuid=True), ForeignKey("genres.id", ondelete="CASCADE"), primary_key=True),
-)
+    Column("movie_id", UUID(as_uuid=True), ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True),
+    Column("genre_id", UUID(as_uuid=True), ForeignKey("genres.id", ondelete="CASCADE"), primary_key=True))
 
 
 class MoviePerson(Base):

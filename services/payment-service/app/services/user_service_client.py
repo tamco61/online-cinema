@@ -222,7 +222,7 @@ class UserServiceClient:
                 "event_type": event_type,
                 "user_id": str(user_id),
                 "payment_id": str(payment_id),
-                "metadata": metadata or {},
+                "payment_metadata": metadata or {},
                 "timestamp": datetime.utcnow().isoformat()
             }
 

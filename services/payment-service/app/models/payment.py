@@ -52,7 +52,7 @@ class Payment(Base):
     idempotency_key = Column(String(255), nullable=True, unique=True, index=True)
 
     # Metadata
-    metadata = Column(Text, nullable=True)  # JSON string for additional data
+    payment_metadata = Column(Text, nullable=True)  # JSON string for additional data
 
     # Checkout session
     checkout_url = Column(String(512), nullable=True)

@@ -54,7 +54,7 @@ class YooMoneyWebhookEvent(BaseModel):
                     "id": "2d8b8b7a-000f-5000-9000-1b7e3f9e0e9f",
                     "status": "succeeded",
                     "amount": {"value": "599.00", "currency": "RUB"},
-                    "metadata": {"payment_id": "uuid"}
+                    "payment_metadata": {"payment_id": "uuid"}
                 }
             }
         }

@@ -121,6 +121,15 @@ async def health():
     }
 
 
+from fastapi.responses import PlainTextResponse
+import yaml
+
+@app.get("/openapi.yaml", include_in_schema=False)
+async def get_openapi_yaml():
+    openapi_dict = app.openapi()
+    yaml_content = yaml.dump(openapi_dict, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    return PlainTextResponse(yaml_content, media_type="text/yaml")
+
 if __name__ == "__main__":
     import uvicorn
 

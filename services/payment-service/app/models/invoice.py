@@ -48,7 +48,7 @@ class Invoice(Base):
     paid_date = Column(DateTime, nullable=True)
 
     # Metadata
-    metadata = Column(Text, nullable=True)  # JSON string
+    invoice_metadata = Column(Text, nullable=True)  # JSON string
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
